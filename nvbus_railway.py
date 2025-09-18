@@ -1,6 +1,6 @@
 # ---------------- nvbus_railway.py ----------------
-import time
 import os
+import time
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask
@@ -12,15 +12,17 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from twilio.rest import Client
 import chromedriver_autoinstaller
+import logging
+
+# ---------------- Logging Setup ----------------
+logging.basicConfig(level=logging.WARNING)  # Only warnings/errors to reduce logs
+logger = logging.getLogger(__name__)
 
 # ---------------- Twilio Setup ----------------
-TWILIO_SID = os.environ.get("TWILIO_SID")
-TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-FROM_WHATSAPP = os.environ.get("FROM_WHATSAPP")
-TO_WHATSAPP = os.environ.get("TO_WHATSAPP")
-
-
-client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
+TWILIO_SID = os.getenv("TWILIO_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+FROM_WHATSAPP = os.getenv("FROM_WHATSAPP")
+TO_WHATSAPP = os.getenv("TO_WHATSAPP")
 
 def send_whatsapp_message(message):
     try:
@@ -30,9 +32,9 @@ def send_whatsapp_message(message):
             from_=FROM_WHATSAPP,
             to=TO_WHATSAPP
         )
-        print("WhatsApp message sent!")
+        logger.warning("WhatsApp message sent!")  # minimal logging
     except Exception as e:
-        print("Failed to send WhatsApp message:", e)
+        logger.error("Failed to send WhatsApp message: %s", e)
 
 # ---------------- NVBus Helper Functions ----------------
 def get_total_price(driver):
@@ -46,54 +48,56 @@ def get_total_price(driver):
             continue
     return None
 
-def select_seat_and_get_price(driver, seat_number, label):
+def select_seat_and_get_price(driver, seat_number):
     seat = driver.find_element(By.XPATH, f"//span[text()='{seat_number}']/parent::div")
     driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", seat)
     time.sleep(1)
     seat.click()
     time.sleep(2)
     fare = get_total_price(driver)
-    print(f"{label} ({seat_number}) Total Price = {fare}")
     return fare
 
 # ---------------- Main NVBus Scraper ----------------
 def scrape_nvbus_prices():
-    chromedriver_autoinstaller.install()
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-
-    driver = webdriver.Chrome(options=chrome_options)
-
-    today = datetime.today()
-    today_date = datetime(today.year, today.month, today.day)
-    good_luck_date = datetime(2025, 10, 6)
-
-    if today_date == good_luck_date:
-        send_whatsapp_message("Good Luck! 🍀")
-        driver.quit()
-        return
-
-    dates_to_scrape = [
-        (21, 9, 2025),
-        (28, 9, 2025),
-        (5, 10, 2025)
-    ]
-
-    message = "NVBus Prices:\n"
-
     try:
+        chromedriver_autoinstaller.install()
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        driver = webdriver.Chrome(options=chrome_options)
+
+        today = datetime.today()
+        today_date = datetime(today.year, today.month, today.day)
+        good_luck_date = datetime(2025, 10, 6)
+
+        if today_date == good_luck_date:
+            send_whatsapp_message("Good Luck! 🍀")
+            driver.quit()
+            return
+
+        dates_to_scrape = [
+            (21, 9, 2025),
+            (28, 9, 2025),
+            (5, 10, 2025)
+        ]
+
+        message = "NVBus Prices:\n"
+
         driver.get("https://nvbus.in/")
         time.sleep(3)
+
+        # Close popup if present
         try:
             driver.find_element(By.CSS_SELECTOR, "button.btn-close").click()
         except:
             pass
         time.sleep(1)
 
+        # Enter cities
         from_city = driver.find_element(By.ID, "FromCity")
         from_city.send_keys("Bangalore")
         from_city.send_keys(Keys.RETURN)
@@ -135,10 +139,11 @@ def scrape_nvbus_prices():
             driver.execute_script("arguments[0].click();", first_bus_button)
             time.sleep(3)
 
-            single_price = select_seat_and_get_price(driver, "L8", "Single Seat")
+            # Scrape seats
+            single_price = select_seat_and_get_price(driver, "L8")
             driver.find_element(By.XPATH, "//span[text()='L8']/parent::div").click()
-            time.sleep(2)
-            double_price = select_seat_and_get_price(driver, "L9", "Double Seat")
+            time.sleep(1)
+            double_price = select_seat_and_get_price(driver, "L9")
 
             message += (
                 f"\nDate: {day:02d}-{month:02d}-{year}\n"
@@ -146,12 +151,14 @@ def scrape_nvbus_prices():
                 f"Double Seat (L9) Total Price: {double_price}\n"
             )
 
+            # Reset for next date
             driver.get("https://nvbus.in/")
             time.sleep(3)
             try:
                 driver.find_element(By.CSS_SELECTOR, "button.btn-close").click()
             except:
                 pass
+
             from_city = driver.find_element(By.ID, "FromCity")
             from_city.send_keys("Bangalore")
             from_city.send_keys(Keys.RETURN)
@@ -161,6 +168,8 @@ def scrape_nvbus_prices():
 
         send_whatsapp_message(message.strip())
 
+    except Exception as e:
+        logger.error("Scraping failed: %s", e)
     finally:
         driver.quit()
 
@@ -168,9 +177,9 @@ def scrape_nvbus_prices():
 app = Flask(__name__)
 scheduler = BackgroundScheduler()
 
-# Schedule scraper every day at 07:00 UTC (adjust if needed)
-scheduler.add_job(scrape_nvbus_prices, 'cron', hour=15, minute=0)
-scheduler.add_job(scrape_nvbus_prices, 'cron', hour=4, minute=30)
+# Schedule scraper twice a day (UTC)
+scheduler.add_job(scrape_nvbus_prices, 'cron', hour=15, minute=0)  # 20:30 IST
+scheduler.add_job(scrape_nvbus_prices, 'cron', hour=4, minute=30)  # 10:00 IST
 scheduler.start()
 
 @app.route("/")
@@ -178,4 +187,4 @@ def home():
     return "NVBus Bot is running!"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
