@@ -1,1 +1,1 @@
-worker: python script.py
+worker: python nvbus_railway.py
