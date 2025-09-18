@@ -3,3 +3,5 @@ gunicorn
 apscheduler
 selenium
 twilio
+chromedriver-autoinstaller
+

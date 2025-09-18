@@ -13,7 +13,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from twilio.rest import Client
-import chromedriver_autoinstaller
+from selenium.webdriver.chrome.service import Service
 
 # ---------------- Logging Setup ----------------
 logging.basicConfig(level=logging.WARNING)  # Reduce Railway spam
@@ -72,7 +72,6 @@ def scrape_nvbus_prices():
     """Main scraper job for NVBus"""
     driver = None
     try:
-        chromedriver_autoinstaller.install()
         chrome_options = Options()
         chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--no-sandbox")
@@ -81,7 +80,8 @@ def scrape_nvbus_prices():
         chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.binary_location = "/usr/bin/chromium-browser"
 
-        driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
+        service = Service("/usr/bin/chromedriver")
+        driver = webdriver.Chrome(service=service, options=chrome_options)
 
         today = datetime.today()
         today_date = datetime(today.year, today.month, today.day)
