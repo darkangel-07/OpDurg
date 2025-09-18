@@ -79,8 +79,9 @@ def scrape_nvbus_prices():
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.binary_location = "/usr/bin/chromium-browser"
 
-        driver = webdriver.Chrome(options=chrome_options)
+        driver = webdriver.Chrome(executable_path="/usr/bin/chromedriver", options=chrome_options)
 
         today = datetime.today()
         today_date = datetime(today.year, today.month, today.day)
@@ -97,7 +98,7 @@ def scrape_nvbus_prices():
             (5, 10, 2025)
         ]
 
-        message = "NVBus Prices:\n"
+        message = "Ryan's little Project :\n"
 
         driver.get("https://nvbus.in/")
         time.sleep(3)
@@ -196,7 +197,7 @@ def home():
     return render_template_string("""
     <html>
     <head>
-        <title>NVBus Bot</title>
+        <title>Ryan's little Project</title>
         <style>
             body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
             h1 { color: #333; }
@@ -218,7 +219,7 @@ def home():
         </style>
     </head>
     <body>
-        <h1>NVBus Bot</h1>
+        <h1>Ryan's little project </h1>
         <p>Click below to run the scraper on demand:</p>
         <form action="/scrape" method="post">
             <button type="submit">Run Scraper 🚀</button>
@@ -239,7 +240,7 @@ def status_page():
     return render_template_string(f"""
     <html>
     <head>
-        <title>Status - NVBus Bot</title>
+        <title>Status - Ryan's little Project</title>
         <style>
             body {{ font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }}
             h1 {{ color: #333; }}
@@ -247,7 +248,7 @@ def status_page():
         </style>
     </head>
     <body>
-        <h1>📊 NVBus Bot Status</h1>
+        <h1>📊 Check Status</h1>
         <div class="card">
             <p><b>Last Run:</b> {last_run}</p>
             <p><b>Status:</b> {status_info["status"]}</p>
