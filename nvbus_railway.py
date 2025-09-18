@@ -1,9 +1,11 @@
 # ---------------- nvbus_railway.py ----------------
 import os
 import time
+import threading
+import logging
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask
+from flask import Flask, render_template_string
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -12,10 +14,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from twilio.rest import Client
 import chromedriver_autoinstaller
-import logging
 
 # ---------------- Logging Setup ----------------
-logging.basicConfig(level=logging.WARNING)  # Only warnings/errors to reduce logs
+logging.basicConfig(level=logging.WARNING)  # Reduce Railway spam
 logger = logging.getLogger(__name__)
 
 # ---------------- Twilio Setup ----------------
@@ -24,7 +25,15 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 FROM_WHATSAPP = os.getenv("FROM_WHATSAPP")
 TO_WHATSAPP = os.getenv("TO_WHATSAPP")
 
+# ---------------- Status Tracker ----------------
+status_info = {
+    "last_run": None,
+    "status": "Never run",
+    "message_preview": None
+}
+
 def send_whatsapp_message(message):
+    """Send WhatsApp message via Twilio"""
     try:
         client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
         client.messages.create(
@@ -32,9 +41,11 @@ def send_whatsapp_message(message):
             from_=FROM_WHATSAPP,
             to=TO_WHATSAPP
         )
-        logger.warning("WhatsApp message sent!")  # minimal logging
+        logger.warning("WhatsApp message sent!")
+        status_info["message_preview"] = (message[:200] + "...") if len(message) > 200 else message
     except Exception as e:
         logger.error("Failed to send WhatsApp message: %s", e)
+        status_info["message_preview"] = f"Error sending: {e}"
 
 # ---------------- NVBus Helper Functions ----------------
 def get_total_price(driver):
@@ -54,11 +65,12 @@ def select_seat_and_get_price(driver, seat_number):
     time.sleep(1)
     seat.click()
     time.sleep(2)
-    fare = get_total_price(driver)
-    return fare
+    return get_total_price(driver)
 
 # ---------------- Main NVBus Scraper ----------------
 def scrape_nvbus_prices():
+    """Main scraper job for NVBus"""
+    driver = None
     try:
         chromedriver_autoinstaller.install()
         chrome_options = Options()
@@ -76,7 +88,7 @@ def scrape_nvbus_prices():
 
         if today_date == good_luck_date:
             send_whatsapp_message("Good Luck! 🍀")
-            driver.quit()
+            status_info.update({"last_run": datetime.now(), "status": "Success"})
             return
 
         dates_to_scrape = [
@@ -90,14 +102,12 @@ def scrape_nvbus_prices():
         driver.get("https://nvbus.in/")
         time.sleep(3)
 
-        # Close popup if present
         try:
             driver.find_element(By.CSS_SELECTOR, "button.btn-close").click()
         except:
             pass
         time.sleep(1)
 
-        # Enter cities
         from_city = driver.find_element(By.ID, "FromCity")
         from_city.send_keys("Bangalore")
         from_city.send_keys(Keys.RETURN)
@@ -139,7 +149,6 @@ def scrape_nvbus_prices():
             driver.execute_script("arguments[0].click();", first_bus_button)
             time.sleep(3)
 
-            # Scrape seats
             single_price = select_seat_and_get_price(driver, "L8")
             driver.find_element(By.XPATH, "//span[text()='L8']/parent::div").click()
             time.sleep(1)
@@ -151,7 +160,6 @@ def scrape_nvbus_prices():
                 f"Double Seat (L9) Total Price: {double_price}\n"
             )
 
-            # Reset for next date
             driver.get("https://nvbus.in/")
             time.sleep(3)
             try:
@@ -167,24 +175,89 @@ def scrape_nvbus_prices():
             to_city.send_keys(Keys.RETURN)
 
         send_whatsapp_message(message.strip())
+        status_info.update({"last_run": datetime.now(), "status": "Success"})
 
     except Exception as e:
         logger.error("Scraping failed: %s", e)
+        status_info.update({"last_run": datetime.now(), "status": f"Failed - {e}"})
     finally:
-        driver.quit()
+        if driver:
+            driver.quit()
 
 # ---------------- Flask + Scheduler ----------------
 app = Flask(__name__)
 scheduler = BackgroundScheduler()
-
-# Schedule scraper twice a day (UTC)
-scheduler.add_job(scrape_nvbus_prices, 'cron', hour=15, minute=0)  # 20:30 IST
-scheduler.add_job(scrape_nvbus_prices, 'cron', hour=4, minute=30)  # 10:00 IST
+scheduler.add_job(scrape_nvbus_prices, 'cron', hour=15, minute=0)   # 20:30 IST
+scheduler.add_job(scrape_nvbus_prices, 'cron', hour=4, minute=30)   # 10:00 IST
 scheduler.start()
 
 @app.route("/")
 def home():
-    return "NVBus Bot is running!"
+    return render_template_string("""
+    <html>
+    <head>
+        <title>NVBus Bot</title>
+        <style>
+            body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+            h1 { color: #333; }
+            button {
+                background-color: #4CAF50;
+                border: none;
+                color: white;
+                padding: 15px 30px;
+                text-align: center;
+                text-decoration: none;
+                display: inline-block;
+                font-size: 18px;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: background 0.3s ease;
+            }
+            button:hover { background-color: #45a049; }
+            a { display:block; margin-top:20px; color:#007BFF; text-decoration:none; }
+        </style>
+    </head>
+    <body>
+        <h1>NVBus Bot</h1>
+        <p>Click below to run the scraper on demand:</p>
+        <form action="/scrape" method="post">
+            <button type="submit">Run Scraper 🚀</button>
+        </form>
+        <a href="/status">📊 View Status</a>
+    </body>
+    </html>
+    """)
+
+@app.route("/scrape", methods=["POST"])
+def run_scraper():
+    threading.Thread(target=scrape_nvbus_prices).start()
+    return "Scraper triggered! 🚀 Check WhatsApp for updates."
+
+@app.route("/status")
+def status_page():
+    last_run = status_info["last_run"].strftime("%Y-%m-%d %H:%M:%S") if status_info["last_run"] else "Never"
+    return render_template_string(f"""
+    <html>
+    <head>
+        <title>Status - NVBus Bot</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }}
+            h1 {{ color: #333; }}
+            .card {{ background: #f8f8f8; padding: 20px; border-radius: 10px; display: inline-block; }}
+        </style>
+    </head>
+    <body>
+        <h1>📊 NVBus Bot Status</h1>
+        <div class="card">
+            <p><b>Last Run:</b> {last_run}</p>
+            <p><b>Status:</b> {status_info["status"]}</p>
+            <p><b>Last Message Preview:</b><br>{status_info["message_preview"] or "None"}</p>
+        </div>
+        <br><br>
+        <a href="/">⬅ Back to Home</a>
+    </body>
+    </html>
+    """)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
