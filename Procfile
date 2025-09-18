@@ -1,1 +1,1 @@
-worker: python nvbus_railway.py
+web: python nvbus_railway.py
