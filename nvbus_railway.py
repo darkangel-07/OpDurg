@@ -15,6 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from twilio.rest import Client
 from selenium.webdriver.chrome.service import Service
 
+
 # ---------------- Logging Setup ----------------
 logging.basicConfig(level=logging.WARNING)  # Reduce Railway spam
 logger = logging.getLogger(__name__)
@@ -78,10 +79,12 @@ def scrape_nvbus_prices():
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.binary_location = "/usr/bin/chromium-browser"
+        chrome_options.binary_location = "/usr/bin/chromium"
 
         service = Service("/usr/bin/chromedriver")
         driver = webdriver.Chrome(service=service, options=chrome_options)
+
+
 
         today = datetime.today()
         today_date = datetime(today.year, today.month, today.day)
