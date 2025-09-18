@@ -14,10 +14,13 @@ from twilio.rest import Client
 import chromedriver_autoinstaller
 
 # ---------------- Twilio Setup ----------------
-TWILIO_SID = os.getenv("TWILIO_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-FROM_WHATSAPP = os.getenv("FROM_WHATSAPP")
-TO_WHATSAPP = os.getenv("TO_WHATSAPP")
+TWILIO_SID = os.environ.get("TWILIO_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+FROM_WHATSAPP = os.environ.get("FROM_WHATSAPP")
+TO_WHATSAPP = os.environ.get("TO_WHATSAPP")
+
+
+client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
 
 def send_whatsapp_message(message):
     try:
