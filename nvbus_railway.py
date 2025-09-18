@@ -1,5 +1,6 @@
 # ---------------- nvbus_railway.py ----------------
 import time
+import os
 from datetime import datetime
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask
@@ -13,10 +14,10 @@ from twilio.rest import Client
 import chromedriver_autoinstaller
 
 # ---------------- Twilio Setup ----------------
-TWILIO_SID = "***REMOVED***"
-TWILIO_AUTH_TOKEN = "***REMOVED***"
-FROM_WHATSAPP = "whatsapp:+14155238886"
-TO_WHATSAPP = "whatsapp:+919865485862"
+TWILIO_SID = os.getenv("TWILIO_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+FROM_WHATSAPP = os.getenv("FROM_WHATSAPP")
+TO_WHATSAPP = os.getenv("TO_WHATSAPP")
 
 def send_whatsapp_message(message):
     try:
